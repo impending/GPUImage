@@ -33,6 +33,10 @@ NSString *const kGPUImageColorSwizzlingFragmentShaderString = SHADER_STRING
     BOOL audioEncodingIsFinished, videoEncodingIsFinished;
 
     BOOL isRecording;
+
+#if TARGET_OS_IPHONE
+	UIBackgroundTaskIdentifier backgroundTask;
+#endif
 }
 
 // Movie recording
@@ -137,6 +141,10 @@ NSString *const kGPUImageColorSwizzlingFragmentShaderString = SHADER_STRING
         glEnableVertexAttribArray(colorSwizzlingTextureCoordinateAttribute);
     });
         
+#if TARGET_OS_IPHONE
+	backgroundTask = UIBackgroundTaskInvalid;
+#endif
+	
     [self initializeMovieWithOutputSettings:outputSettings];
 
     return self;
@@ -155,6 +163,14 @@ NSString *const kGPUImageColorSwizzlingFragmentShaderString = SHADER_STRING
     {
         dispatch_release(videoQueue);
     }
+#endif
+
+#if TARGET_OS_IPHONE
+	if(backgroundTask != UIBackgroundTaskInvalid)
+	{
+		[UIApplication.sharedApplication endBackgroundTask:backgroundTask];
+		backgroundTask = UIBackgroundTaskInvalid;
+	}
 #endif
 }
 
@@ -263,6 +279,15 @@ NSString *const kGPUImageColorSwizzlingFragmentShaderString = SHADER_STRING
     });
     isRecording = YES;
 	//    [assetWriter startSessionAtSourceTime:kCMTimeZero];
+
+#if TARGET_OS_IPHONE
+	// Unsing a background task here ensures that the asset writer is not failed after coming back from background.
+	// Still this only buys some time, but usually 10 minutes should be enough to finish the most tasks.
+	backgroundTask = [UIApplication.sharedApplication beginBackgroundTaskWithExpirationHandler:^{
+		NSLog(@"Failed to complete background task from Image Movie Writer: %@", movieURL.lastPathComponent);
+		backgroundTask = UIBackgroundTaskInvalid;
+	}];
+#endif
 }
 
 - (void)startRecordingInOrientation:(CGAffineTransform)orientationTransform;
@@ -295,6 +320,14 @@ NSString *const kGPUImageColorSwizzlingFragmentShaderString = SHADER_STRING
         }
         [assetWriter cancelWriting];
     });
+
+#if TARGET_OS_IPHONE
+	if(backgroundTask != UIBackgroundTaskInvalid)
+	{
+		[UIApplication.sharedApplication endBackgroundTask:backgroundTask];
+		backgroundTask = UIBackgroundTaskInvalid;
+	}
+#endif
 }
 
 - (void)finishRecording;
@@ -345,6 +378,14 @@ NSString *const kGPUImageColorSwizzlingFragmentShaderString = SHADER_STRING
         }
 #endif
     });
+
+#if TARGET_OS_IPHONE
+	if(backgroundTask != UIBackgroundTaskInvalid)
+	{
+		[UIApplication.sharedApplication endBackgroundTask:backgroundTask];
+		backgroundTask = UIBackgroundTaskInvalid;
+	}
+#endif
 }
 
 - (void)processAudioBuffer:(CMSampleBufferRef)audioBuffer;
