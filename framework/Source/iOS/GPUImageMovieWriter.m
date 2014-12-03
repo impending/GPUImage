@@ -33,6 +33,7 @@ NSString *const kGPUImageColorSwizzlingFragmentShaderString = SHADER_STRING
     BOOL audioEncodingIsFinished, videoEncodingIsFinished;
 
     BOOL isRecording;
+	BOOL didAppendVideoFrame;
 
 #if TARGET_OS_IPHONE
 	UIBackgroundTaskIdentifier backgroundTask;
@@ -180,7 +181,7 @@ NSString *const kGPUImageColorSwizzlingFragmentShaderString = SHADER_STRING
 - (void)initializeMovieWithOutputSettings:(NSDictionary *)outputSettings;
 {
     isRecording = NO;
-    
+    didAppendVideoFrame = NO;
     self.enabled = YES;
     NSError *error = nil;
     assetWriter = [[AVAssetWriter alloc] initWithURL:movieURL fileType:fileType error:&error];
@@ -278,6 +279,7 @@ NSString *const kGPUImageColorSwizzlingFragmentShaderString = SHADER_STRING
         }
     });
     isRecording = YES;
+	didAppendVideoFrame = NO;
 	//    [assetWriter startSessionAtSourceTime:kCMTimeZero];
 
 #if TARGET_OS_IPHONE
@@ -305,6 +307,7 @@ NSString *const kGPUImageColorSwizzlingFragmentShaderString = SHADER_STRING
     }
     
     isRecording = NO;
+	didAppendVideoFrame = NO;
     runSynchronouslyOnContextQueue(_movieWriterContext, ^{
         alreadyFinishedRecording = YES;
 
@@ -339,7 +342,7 @@ NSString *const kGPUImageColorSwizzlingFragmentShaderString = SHADER_STRING
 {
     runSynchronouslyOnContextQueue(_movieWriterContext, ^{
         isRecording = NO;
-        
+        didAppendVideoFrame = NO;
         if (assetWriter.status == AVAssetWriterStatusCompleted || assetWriter.status == AVAssetWriterStatusCancelled || assetWriter.status == AVAssetWriterStatusUnknown)
         {
             if (handler)
@@ -394,6 +397,11 @@ NSString *const kGPUImageColorSwizzlingFragmentShaderString = SHADER_STRING
     {
         return;
     }
+	
+	if (!didAppendVideoFrame)
+	{
+		return;
+	}
     
 //    if (_hasAudioTrack && CMTIME_IS_VALID(startTime))
     if (_hasAudioTrack)
@@ -773,7 +781,13 @@ NSString *const kGPUImageColorSwizzlingFragmentShaderString = SHADER_STRING
             else if(self.assetWriter.status == AVAssetWriterStatusWriting)
             {
                 if (![assetWriterPixelBufferInput appendPixelBuffer:pixel_buffer withPresentationTime:frameTime])
-                    NSLog(@"Problem appending pixel buffer at time: %@", CFBridgingRelease(CMTimeCopyDescription(kCFAllocatorDefault, frameTime)));
+				{
+					NSLog(@"Problem appending pixel buffer at time: %@", CFBridgingRelease(CMTimeCopyDescription(kCFAllocatorDefault, frameTime)));
+				}
+				else
+				{
+					didAppendVideoFrame = YES;
+				}
             }
             else
             {
